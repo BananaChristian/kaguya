@@ -2,8 +2,8 @@
 target = "x86_64-unknown-none"
 
 [target.x86_64-unknown-none]
+runner = "bootimage runner"
 rustflags = [
-    "-C", "link-arg=-no-pie",
-    "-C", "link-arg=-Tlinker.ld",
-    "-C", "link-arg=bin/entry.o"
+    "-C", "relocation-model=static",
 ]
+
