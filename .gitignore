@@ -7,3 +7,12 @@ target/
 *.bin
 os_image.bin
 **/bin/
+
+# Limine + boot image build artifacts
+limine-binary/
+limine.tar.xz
+iso_root/
+*.iso
+*.hdd
+*.img
+qemu*.log
