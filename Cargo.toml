@@ -10,7 +10,6 @@ x86_64 = {
   version = "0.14", default-features=false, features = ["instructions","abi_x86_interrupt"]
 }
 spin = "0.9"
-pc-keyboard = "0.7.0"
 
 [[bin]]
 name= "kaguya"

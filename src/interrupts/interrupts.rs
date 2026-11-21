@@ -1,8 +1,6 @@
 use crate::gdt;
 use crate::{print, println};
-use pc_keyboard::{DecodedKey, HandleControl, Keyboard, ScancodeSet1, layouts};
 use spin::Lazy;
-use spin::mutex::Mutex;
 use x86_64::instructions::port::Port;
 use x86_64::registers::control::Cr2;
 use x86_64::structures::idt::{InterruptDescriptorTable, InterruptStackFrame, PageFaultErrorCode};
@@ -10,7 +8,6 @@ use x86_64::structures::idt::{InterruptDescriptorTable, InterruptStackFrame, Pag
 // Interrupt Vector Offset for PIC
 pub const PIC_1_OFFSET: u8 = 32;
 pub const TIMER_INTERRUPT_INDEX: u8 = PIC_1_OFFSET;
-pub const KEYBOARD_INTERRUPT_INDEX: u8 = PIC_1_OFFSET + 1;
 pub const SPURIOUS_INTERRUPT_INDEX: u8 = PIC_1_OFFSET + 7;
 
 // Safe, thread-safe IDT loaded at runtime
@@ -19,7 +16,7 @@ static IDT: Lazy<InterruptDescriptorTable> = Lazy::new(|| {
 
     // CPU Exception handlers
     idt.divide_error.set_handler_fn(divide_by_zero_handler);
-    
+
     unsafe {
         idt.double_fault
             .set_handler_fn(double_fault_handler)
@@ -30,18 +27,9 @@ static IDT: Lazy<InterruptDescriptorTable> = Lazy::new(|| {
 
     // Hardware Interrupts (Vector 32 / 0x20 = Timer)
     idt[TIMER_INTERRUPT_INDEX as usize].set_handler_fn(timer_interrupt_handler);
-    idt[KEYBOARD_INTERRUPT_INDEX as usize].set_handler_fn(keyboard_interrupt_handler);
     idt[SPURIOUS_INTERRUPT_INDEX as usize].set_handler_fn(spurious_interrupt_handler);
 
     idt
-});
-
-static KEYBOARD: Lazy<Mutex<Keyboard<layouts::Us104Key, ScancodeSet1>>> = Lazy::new(|| {
-    Mutex::new(Keyboard::new(
-        ScancodeSet1::new(),
-        layouts::Us104Key,
-        HandleControl::MapLettersToUnicode,
-    ))
 });
 
 pub fn initialize_interrupts() {
@@ -51,7 +39,7 @@ pub fn initialize_interrupts() {
     //  Remap 8259 PIC
     remap_pic();
 
-    // 3. Enable Interrupts (`sti`)
+    //  Enable Interrupts
     x86_64::instructions::interrupts::enable();
 }
 
@@ -92,25 +80,6 @@ extern "x86-interrupt" fn page_fault_handler(
 //Hardware Interrupts
 extern "x86-interrupt" fn timer_interrupt_handler(_stack_frame: InterruptStackFrame) {
     send_eoi(0);
-}
-
-extern "x86-interrupt" fn keyboard_interrupt_handler(_stack_frame: InterruptStackFrame) {
-    let mut port: Port<u8> = Port::new(0x60);
-    let scancode: u8 = unsafe { port.read() };
-
-    let mut keyboard = KEYBOARD.lock();
-
-    // Process raw scancodes through the state machine
-    if let Ok(Some(key_event)) = keyboard.add_byte(scancode) {
-        if let Some(key) = keyboard.process_keyevent(key_event) {
-            match key {
-                DecodedKey::Unicode(character) => print!("{}", character),
-                DecodedKey::RawKey(raw_key) => print!("{:?}", raw_key),
-            }
-        }
-    }
-
-    send_eoi(1);
 }
 
 extern "x86-interrupt" fn spurious_interrupt_handler(_stack_frame: InterruptStackFrame) {
