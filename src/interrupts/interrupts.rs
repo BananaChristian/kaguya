@@ -1,5 +1,5 @@
 use crate::gdt;
-use crate::{print, println};
+use crate::println;
 use spin::Lazy;
 use x86_64::instructions::port::Port;
 use x86_64::registers::control::Cr2;
@@ -10,7 +10,6 @@ pub const PIC_1_OFFSET: u8 = 32;
 pub const TIMER_INTERRUPT_INDEX: u8 = PIC_1_OFFSET;
 pub const SPURIOUS_INTERRUPT_INDEX: u8 = PIC_1_OFFSET + 7;
 
-// Safe, thread-safe IDT loaded at runtime
 static IDT: Lazy<InterruptDescriptorTable> = Lazy::new(|| {
     let mut idt = InterruptDescriptorTable::new();
 
@@ -33,17 +32,13 @@ static IDT: Lazy<InterruptDescriptorTable> = Lazy::new(|| {
 });
 
 pub fn initialize_interrupts() {
-    // Load IDT (Automatically reads active CS register)
     IDT.load();
 
-    //  Remap 8259 PIC
     remap_pic();
 
-    //  Enable Interrupts
     x86_64::instructions::interrupts::enable();
 }
 
-//Exception Handlers
 extern "x86-interrupt" fn divide_by_zero_handler(stack_frame: InterruptStackFrame) {
     println!("[EXCEPTION] DIVIDE BY ZERO\n{:#?}", stack_frame);
     loop {
@@ -77,7 +72,6 @@ extern "x86-interrupt" fn page_fault_handler(
     }
 }
 
-//Hardware Interrupts
 extern "x86-interrupt" fn timer_interrupt_handler(_stack_frame: InterruptStackFrame) {
     send_eoi(0);
 }
@@ -110,32 +104,31 @@ fn remap_pic() {
     unsafe {
         let mut io_wait = || wait_port.write(0);
 
-        // ICW1: Initialize Master & Slave
+        // ICW1, Initialize Master & Slave
         master_cmd.write(0x11);
         io_wait();
         slave_cmd.write(0x11);
         io_wait();
 
-        // ICW2: Vector offsets (Master = 32, Slave = 40)
+        // ICW2, Vector offsets (Master = 32, Slave = 40)
         master_data.write(PIC_1_OFFSET);
         io_wait();
         slave_data.write(PIC_1_OFFSET + 8);
         io_wait();
 
-        // ICW3: Cascading setup
+        // ICW3, Cascading setup
         master_data.write(0x04);
         io_wait();
         slave_data.write(0x02);
         io_wait();
 
-        // ICW4: 8086 mode
+        // ICW4, 8086 mode
         master_data.write(0x01);
         io_wait();
         slave_data.write(0x01);
         io_wait();
 
-        // Mask ports: Unmask IRQ0 (Timer) on Master, mask all on Slave
-        master_data.write(0xFC);
+        master_data.write(0xFE);
         slave_data.write(0xFF);
     }
 }
